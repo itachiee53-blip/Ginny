@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "mcp__github__*"
+    ]
+  }
+}
