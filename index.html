@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Pet Buddy</title>
+<style>
+:root{--bg:#fdf6ec;--card:#fff;--ink:#3b3340;--sub:#8a7f8f;--acc:#ff8fa3;--ok:#7bd389;--warn:#ffc857;--bad:#ff6b6b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,"Noto Sans Thai",sans-serif;display:flex;justify-content:center}
+#app{width:100%;max-width:440px;min-height:100vh;padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+header{display:flex;justify-content:space-between;align-items:center}
+h1{font-size:20px;margin:0}
+.pill{background:var(--card);border-radius:99px;padding:4px 12px;font-weight:700;box-shadow:0 2px 6px #0001}
+#stage{position:relative;height:300px;border-radius:24px;background:linear-gradient(#bfe6ff,#e8f7ff 65%,#b9e4a1 65%);overflow:hidden;box-shadow:0 4px 14px #0002;transition:filter .5s}
+#stage.night{filter:brightness(.45) saturate(.7)}
+#pet{position:absolute;left:50%;bottom:30px;width:170px;transform:translateX(-50%);cursor:pointer}
+#pet.bounce{animation:b .5s}
+#pet.idle{animation:idle 2.4s ease-in-out infinite}
+@keyframes b{50%{transform:translateX(-50%) translateY(-30px) scale(1.05,.95)}}
+@keyframes idle{50%{transform:translateX(-50%) scale(1.03,.97)}}
+.poop{position:absolute;bottom:22px;font-size:30px;cursor:pointer}
+.fx{position:absolute;font-size:28px;pointer-events:none;animation:up 1s forwards}
+@keyframes up{to{transform:translateY(-70px);opacity:0}}
+#zz{position:absolute;right:28%;top:30%;font-size:26px;font-weight:800;color:#fff;display:none;animation:idle 2s infinite}
+#info{text-align:center}
+#name{font-size:20px;font-weight:800;cursor:pointer}
+#meta{color:var(--sub);font-size:13px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;background:var(--card);padding:12px;border-radius:18px;box-shadow:0 2px 8px #0001}
+.stat{font-size:13px}
+.bar{height:9px;border-radius:9px;background:#eee;overflow:hidden;margin-top:3px}
+.bar i{display:block;height:100%;border-radius:9px;transition:width .4s}
+.actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+button{font:inherit;border:0;border-radius:16px;background:var(--card);padding:10px 4px;font-size:14px;font-weight:700;box-shadow:0 2px 6px #0002;cursor:pointer;color:var(--ink)}
+button b{display:block;font-size:24px}
+button:active{transform:scale(.95)}
+button:disabled{opacity:.4}
+#msg{text-align:center;min-height:20px;font-size:14px;color:var(--sub)}
+.modal{position:fixed;inset:0;background:#0006;display:none;align-items:center;justify-content:center;padding:16px;z-index:9}
+.modal.on{display:flex}
+.box{background:var(--card);border-radius:22px;padding:18px;width:100%;max-width:400px}
+.box h2{margin:0 0 10px;font-size:18px}
+.shop{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#game{position:relative;height:300px;background:#e8f7ff;border-radius:16px;overflow:hidden;touch-action:none}
+.star{position:absolute;font-size:34px;cursor:pointer;user-select:none}
+input{font:inherit;width:100%;padding:10px;border-radius:12px;border:2px solid #eee;margin-bottom:10px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header><h1>🐾 Pet Buddy</h1><span class="pill">🪙 <span id="coins">0</span></span></header>
+  <div id="stage"><div id="zz">Z z z</div><svg id="pet" viewBox="0 0 200 200"></svg></div>
+  <div id="info"><div id="name"></div><div id="meta"></div></div>
+  <div class="stats" id="stats"></div>
+  <div id="msg"></div>
+  <div class="actions">
+    <button data-a="feed"><b>🍎</b>ให้อาหาร</button>
+    <button data-a="play"><b>🎾</b>เล่นเกม</button>
+    <button data-a="bath"><b>🛁</b>อาบน้ำ</button>
+    <button data-a="sleep"><b>🌙</b>นอน</button>
+    <button data-a="heal"><b>💊</b>รักษา</button>
+    <button data-a="pet"><b>💖</b>ลูบหัว</button>
+  </div>
+</div>
+
+<div class="modal" id="mShop"><div class="box"><h2>เลือกอาหาร</h2><div class="shop" id="shop"></div><br><button onclick="close_('mShop')" style="width:100%">ปิด</button></div></div>
+<div class="modal" id="mGame"><div class="box"><h2>เก็บดาว! ⭐ <span id="gInfo"></span></h2><div id="game"></div></div></div>
+<div class="modal" id="mName"><div class="box"><h2>ตั้งชื่อสัตว์เลี้ยง</h2><input id="nameIn" maxlength="14" placeholder="เช่น มะลิ"><button onclick="setName()" style="width:100%">ตกลง</button></div></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const STAGES=[{n:'แรกเกิด',xp:0},{n:'ลูกน้อย',xp:30},{n:'วัยซน',xp:150},{n:'โตเต็มวัย',xp:400}];
+const COLORS=['#fff3d6','#ffb3c6','#b5a8ff','#7fd1b9'];
+const FOODS=[{e:'🍎',n:'แอปเปิล',c:0,h:15,j:2},{e:'🐟',n:'ปลา',c:10,h:30,j:5},{e:'🍰',n:'เค้ก',c:20,h:20,j:20},{e:'🍖',n:'เนื้อ',c:25,h:50,j:8}];
+const STATS=[['hunger','🍗 อิ่ม'],['joy','😊 สุข'],['energy','⚡ พลัง'],['clean','🧼 สะอาด']];
+const def=()=>({name:'',coins:20,xp:0,hunger:80,joy:80,energy:80,clean:80,health:100,sick:false,sleep:false,poop:0,born:Date.now(),last:Date.now(),hatch:0,dead:false});
+let s;try{s=JSON.parse(localStorage.getItem('petbuddy'))}catch(e){}
+if(!s)s=def();
+const save=()=>{s.last=Date.now();try{localStorage.setItem('petbuddy',JSON.stringify(s))}catch(e){}};
+const cl=v=>Math.max(0,Math.min(100,v));
+const stage=()=>STAGES.reduce((a,x,i)=>s.xp>=x.xp?i:a,0);
+const isEgg=()=>s.hatch<5;
+function msg(t){$('msg').textContent=t}
+function fx(e,x,y){const d=document.createElement('div');d.className='fx';d.textContent=e;d.style.left=(x??45+Math.random()*10)+'%';d.style.top=(y??35)+'%';$('stage').appendChild(d);setTimeout(()=>d.remove(),1000)}
+
+// เวลาผ่านไป (นาที) — ค่าลดลงตามเวลา รวมตอนปิดเกม (สูงสุด 12 ชม.)
+function tick(min){
+  if(isEgg()||s.dead)return;
+  for(let i=0;i<min;i++){
+    if(s.sleep){s.energy=cl(s.energy+4);s.hunger=cl(s.hunger-.5);if(s.energy>=100){s.sleep=false}}
+    else{s.hunger=cl(s.hunger-1.2);s.joy=cl(s.joy-1);s.energy=cl(s.energy-.7);s.clean=cl(s.clean-.6)}
+    if(!s.sleep&&Math.random()<.04&&s.poop<3){s.poop++}
+    s.clean=cl(s.clean-s.poop*.4);
+    const low=STATS.filter(([k])=>s[k]<20).length;
+    if(!s.sick&&(s.clean<25||s.hunger<10)&&Math.random()<.05)s.sick=true;
+    s.health=cl(s.health+(low?-low*.8:.5)-(s.sick?1:0));
+    if(s.health<=0){s.dead=true;break}
+    if(low===0&&!s.sick)s.xp+=.5;
+  }
+}
+tick(Math.min(720,Math.floor((Date.now()-s.last)/60000)));
+
+function draw(){
+  const st=stage(),c=COLORS[st],sad=s.joy<30||s.sick,sz=[.65,.8,.92,1.05][st];
+  let svg='';
+  if(isEgg()){
+    const cr=s.hatch>0?`<path d="M70 95 l12 10 l10-12 l12 12 l12-10" stroke="#a88" stroke-width="3" fill="none" opacity="${s.hatch/5}"/>`:'';
+    svg=`<ellipse cx="100" cy="190" rx="50" ry="8" fill="#0002"/><ellipse cx="100" cy="115" rx="55" ry="72" fill="${c}" stroke="#e8d6a8" stroke-width="4"/><circle cx="80" cy="90" r="8" fill="#ffd6a5"/><circle cx="120" cy="130" r="11" fill="#ffd6a5"/>${cr}`;
+  }else if(s.dead){
+    svg=`<text x="100" y="150" font-size="110" text-anchor="middle">🪦</text>`;
+  }else{
+    const eyes=s.sleep?`<path d="M72 105 q8 6 16 0 M112 105 q8 6 16 0" stroke="#333" stroke-width="4" fill="none"/>`
+      :`<circle cx="80" cy="102" r="9" fill="#333"/><circle cx="120" cy="102" r="9" fill="#333"/><circle cx="83" cy="99" r="3" fill="#fff"/><circle cx="123" cy="99" r="3" fill="#fff"/>`;
+    const mouth=s.sleep?`<circle cx="100" cy="128" r="4" fill="#333"/>`:sad?`<path d="M88 133 q12 -10 24 0" stroke="#333" stroke-width="4" fill="none"/>`:`<path d="M86 124 q14 14 28 0" stroke="#333" stroke-width="4" fill="none"/>`;
+    const ears=st>=2?`<ellipse cx="58" cy="62" rx="14" ry="26" fill="${c}" transform="rotate(-25 58 62)"/><ellipse cx="142" cy="62" rx="14" ry="26" fill="${c}" transform="rotate(25 142 62)"/>`:'';
+    const crown=st>=3?`<text x="100" y="58" font-size="34" text-anchor="middle">👑</text>`:'';
+    const dirt=s.clean<40?`<circle cx="70" cy="140" r="6" fill="#8b6b4a" opacity=".6"/><circle cx="128" cy="150" r="5" fill="#8b6b4a" opacity=".6"/>`:'';
+    const sick=s.sick?`<text x="140" y="80" font-size="26">🤒</text>`:'';
+    svg=`<g transform="translate(100 190) scale(${sz}) translate(-100 -190)"><ellipse cx="100" cy="190" rx="60" ry="9" fill="#0002"/>${ears}<path d="M40 150 Q35 70 100 68 Q165 70 160 150 Q160 188 100 188 Q40 188 40 150Z" fill="${c}"/><ellipse cx="70" cy="118" rx="9" ry="6" fill="#ff8fa3" opacity=".5"/><ellipse cx="130" cy="118" rx="9" ry="6" fill="#ff8fa3" opacity=".5"/>${eyes}${mouth}${dirt}${sick}${crown}</g>`;
+  }
+  $('pet').innerHTML=svg;
+  $('pet').classList.toggle('idle',!s.sleep&&!s.dead);
+  $('stage').classList.toggle('night',s.sleep);
+  $('zz').style.display=s.sleep?'block':'none';
+  document.querySelectorAll('.poop').forEach(p=>p.remove());
+  for(let i=0;i<s.poop;i++){const p=document.createElement('div');p.className='poop';p.textContent='💩';p.style.left=(12+i*25)%80+'%';p.onclick=()=>{s.poop--;s.coins+=1;fx('✨',parseFloat(p.style.left),70);upd()};$('stage').appendChild(p)}
+  $('coins').textContent=s.coins;
+  $('name').textContent=(s.name||'???')+' ✏️';
+  const age=Math.floor((Date.now()-s.born)/86400000);
+  $('meta').textContent=isEgg()?'แตะไข่เพื่อฟัก!':`${STAGES[st].n} · อายุ ${age} วัน · XP ${Math.floor(s.xp)}${st<3?'/'+STAGES[st+1].xp:''}`;
+  $('stats').innerHTML=[...STATS,['health','❤️ สุขภาพ']].map(([k,l])=>{const v=Math.round(s[k]);const col=v>60?'var(--ok)':v>25?'var(--warn)':'var(--bad)';return`<div class="stat">${l} ${v}<div class="bar"><i style="width:${v}%;background:${col}"></i></div></div>`}).join('');
+  document.querySelectorAll('[data-a]').forEach(b=>b.disabled=isEgg()||s.dead||(s.sleep&&b.dataset.a!=='sleep'));
+  if(s.dead){msg('😢 สัตว์เลี้ยงจากไปแล้ว... แตะป้ายหลุมเพื่อเริ่มใหม่')}
+}
+function upd(){save();draw()}
+function bounce(){const p=$('pet');p.classList.remove('bounce');void p.offsetWidth;p.classList.add('bounce')}
+
+$('pet').onclick=()=>{
+  if(s.dead){if(confirm('เริ่มเลี้ยงตัวใหม่?')){s=def();upd();msg('')}return}
+  if(isEgg()){s.hatch++;bounce();fx('✨');if(!isEgg()){fx('🎉');msg('ฟักแล้ว! ตั้งชื่อให้เลย');$('mName').classList.add('on')}upd();return}
+  if(s.sleep)return;
+  bounce();fx('💕');s.joy=cl(s.joy+2);upd();
+};
+$('name').onclick=()=>{if(!isEgg()){$('nameIn').value=s.name;$('mName').classList.add('on')}};
+function setName(){s.name=$('nameIn').value.trim()||'มะลิ';close_('mName');upd()}
+function close_(id){$(id).classList.remove('on')}
+
+$('shop').innerHTML=FOODS.map((f,i)=>`<button onclick="eat(${i})"><b>${f.e}</b>${f.n}<br>${f.c?'🪙 '+f.c:'ฟรี'}</button>`).join('');
+function eat(i){
+  const f=FOODS[i];
+  if(s.coins<f.c)return msg('เหรียญไม่พอ เล่นเกมหาเหรียญก่อนนะ');
+  if(s.hunger>=95){close_('mShop');return msg('อิ่มแล้วจ้า 🙅')}
+  s.coins-=f.c;s.hunger=cl(s.hunger+f.h);s.joy=cl(s.joy+f.j);s.xp+=3;
+  close_('mShop');bounce();fx(f.e);msg(`อร่อย! ${f.e}`);upd();
+}
+
+const ACT={
+  feed:()=>$('mShop').classList.add('on'),
+  play:()=>{if(s.energy<15)return msg('เหนื่อยแล้ว ให้นอนก่อนนะ 😴');startGame()},
+  bath:()=>{if(s.clean>=95&&!s.poop)return msg('สะอาดอยู่แล้ว ✨');s.clean=100;s.poop=0;s.joy=cl(s.joy-3);s.xp+=3;fx('🫧');fx('🫧',40,50);msg('อาบน้ำสะอาดเอี่ยม!');upd()},
+  sleep:()=>{s.sleep=!s.sleep;msg(s.sleep?'ฝันดีนะ 🌙':'ตื่นแล้ว! ☀️');upd()},
+  heal:()=>{if(!s.sick&&s.health>80)return msg('ยังแข็งแรงดีอยู่ 💪');if(s.coins<15)return msg('ยารักษาราคา 🪙15');s.coins-=15;s.sick=false;s.health=cl(s.health+40);fx('💊');msg('หายป่วยแล้ว!');upd()},
+  pet:()=>{bounce();fx('💖');s.joy=cl(s.joy+8);s.xp+=1;msg('ชอบมากเลย~');upd()}
+};
+document.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>ACT[b.dataset.a]());
+
+// มินิเกม: เก็บดาวใน 15 วินาที (ระวังระเบิด)
+function startGame(){
+  const g=$('game');g.innerHTML='';$('mGame').classList.add('on');
+  let score=0,t=15,end=false;
+  const info=()=>$('gInfo').textContent=`⏱${t} · ⭐${score}`;info();
+  const spawn=setInterval(()=>{
+    const bomb=Math.random()<.2,e=document.createElement('div');
+    e.className='star';e.textContent=bomb?'💣':'⭐';
+    e.style.left=Math.random()*85+'%';e.style.top=Math.random()*85+'%';
+    e.onpointerdown=()=>{if(end)return;score=Math.max(0,score+(bomb?-3:1));e.remove();info()};
+    g.appendChild(e);setTimeout(()=>e.remove(),1100);
+  },450);
+  const timer=setInterval(()=>{t--;info();if(t<=0){
+    end=true;clearInterval(spawn);clearInterval(timer);
+    setTimeout(()=>{close_('mGame');s.coins+=score;s.joy=cl(s.joy+15);s.energy=cl(s.energy-12);s.hunger=cl(s.hunger-5);s.xp+=score/2+5;msg(`ได้ ${score} เหรียญ! 🪙`);upd()},400);
+  }},1000);
+}
+
+let lastStage=stage();
+setInterval(()=>{tick(1);const st=stage();if(st>lastStage&&!isEgg()){msg(`🎉 โตขึ้นเป็น "${STAGES[st].n}" แล้ว!`);fx('🎉')}lastStage=st;upd()},60000);
+if(!isEgg()&&!s.name)$('mName').classList.add('on');
+draw();
+</script>
+</body>
+</html>
